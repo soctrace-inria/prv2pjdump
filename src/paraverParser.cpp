@@ -14,15 +14,21 @@ const int STATE_CATEGORY = 1;
 const int EVENT_CATEGORY = 2;
 const int LINK_CATEGORY = 3;
 
-ParaverParser::ParaverParser(string traceFile, string confFile,
-		string resourceFile, string outputFile) {
+const string UNKNOWN_STATE_TYPE = "UNKNOWN_TYPE";
 
-	this->outputFile = outputFile;
+const map<int, string> ParaverParser::defaultStateValues = ParaverParser::create_map();
 
+ParaverParser::ParaverParser() {
 	keyWords.push_back(STATE_CFG);
 	keyWords.push_back(EVENT_CFG);
 	keyWords.push_back(VALUE_CFG);
 	keyWords.push_back(TYPE_CFG);
+}
+
+void ParaverParser::parse(string traceFile, string confFile,
+		string resourceFile, string outputFile) {
+
+	this->outputFile = outputFile;
 
 	if (!confFile.empty())
 		parseConf(confFile);
@@ -34,7 +40,7 @@ ParaverParser::ParaverParser(string traceFile, string confFile,
 }
 
 /**
- * Parsing the configuration file
+ * Parsing the configuration file (.pcf) in order to get the name of the events and of the states
  */
 void ParaverParser::parseConf(string confFile) {
 	ifstream file;
@@ -132,9 +138,11 @@ static inline string &rtrim(string &s) {
 	return s;
 }
 
+/**
+ * Remove white spaces at the beginning and at the end of a string
+ */
 string ParaverParser::trim(string aString) {
 	return ltrim(rtrim(aString));
-
 }
 
 /**
@@ -144,6 +152,9 @@ bool ParaverParser::contains(vector<string> v, string element) {
 	return (find(v.begin(), v.end(), element) != v.end());
 }
 
+/**
+ * Parse the resource file (.row) to get the names of the producers
+ */
 void ParaverParser::parseResource(string resourceFile) {
 	ifstream file;
 	file.open(resourceFile.c_str());
@@ -174,17 +185,23 @@ void ParaverParser::parseTrace(string traceFile) {
 	file.open(traceFile.c_str());
 	string line;
 
-	// Get first non empty line
+	// Get the first non empty line
 	while (getline(file, line) && line.empty()) {
 	}
 
 	// Handle the header
 	parseHeader(line);
 
-	ofstream pjdumpFile;
+	// Open the output file
 	pjdumpFile.open(outputFile);
 
-	pjdumpFile <<buildProducers();
+	if (!pjdumpFile.good()) {
+		cout << "Error: could not open output file " << outputFile << endl;
+		return;
+	}
+
+	// process the producers
+	pjdumpFile << buildProducers();
 
 	// handle the trace records
 	while (getline(file, line)) {
@@ -194,8 +211,7 @@ void ParaverParser::parseTrace(string traceFile) {
 			pjdumpFile << pjdumpLine;
 	}
 
-	 pjdumpFile.close();
-
+	pjdumpFile.close();
 }
 
 /**
@@ -277,7 +293,7 @@ string ParaverParser::parseRecord(string line) {
 
 	string token = line.substr(0, line.find(PRV_SEPARATOR));
 
-	if(!isdigit(token.at(0)))
+	if (!isdigit(token.at(0)))
 		return pjdumpLine;
 
 	int category = stoi(token);
@@ -306,10 +322,10 @@ string ParaverParser::parseRecord(string line) {
  * Parse a line representing a type state
  *
  * from:
- *		1:cpuID:appID:taskID:threadID:startTime:endTime:type
+ *	1:cpuID:appID:taskID:threadID:startTime:endTime:type
  *
  * to:
- *		State, container, state type, startTime, endTime, duration, imbricationLevel, value
+ *	State, container, state type, startTime, endTime, duration, imbricationLevel, value
  */
 string ParaverParser::parseState(string line) {
 
@@ -339,13 +355,13 @@ string ParaverParser::parseState(string line) {
 
 	stringstream pjDumpLine;
 	pjDumpLine << "State, ";
-	pjDumpLine << resourceNames.at("THREAD").at(taskID-1) << PJDUMP_SEPARATOR;
-	pjDumpLine <<  stateNames.at(type) << PJDUMP_SEPARATOR;
+	pjDumpLine << getContainerName(cpuID, taskID, threadID) << PJDUMP_SEPARATOR;
+	pjDumpLine << getStateName(type) << PJDUMP_SEPARATOR;
 	pjDumpLine << startTimestamp << PJDUMP_SEPARATOR;
 	pjDumpLine << endTimestamp << PJDUMP_SEPARATOR;
-	pjDumpLine <<(endTimestamp - startTimestamp) << PJDUMP_SEPARATOR;
+	pjDumpLine << (endTimestamp - startTimestamp) << PJDUMP_SEPARATOR;
 	pjDumpLine << "0,";
-	pjDumpLine << stateNames.at(type) << endl;
+	pjDumpLine << getStateName(type) << endl;
 
 	return pjDumpLine.str();
 }
@@ -354,10 +370,10 @@ string ParaverParser::parseState(string line) {
  * Parse a line representing a punctual event
  *
  * from
- * 2:cpuID:appID:taskID:threadID:startTime:type:value
+ * 	2:cpuID:appID:taskID:threadID:startTime:type:value
  *
  * to
- * Event, containerName, eventName, timeStamp, eventValue
+ * 	Event, containerName, eventName, timeStamp, eventValue
  */
 string ParaverParser::parseEvent(string line) {
 
@@ -390,14 +406,14 @@ string ParaverParser::parseEvent(string line) {
 	int type = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long value =  stol(line);
+	long value = stol(line);
 
 	stringstream pjDumpLine;
 	pjDumpLine << "Event, ";
-	pjDumpLine << resourceNames.at("THREAD").at(taskID-1) << PJDUMP_SEPARATOR;
-	pjDumpLine <<  eventNames.at(type) << PJDUMP_SEPARATOR;
-	pjDumpLine << timestamp  << PJDUMP_SEPARATOR;
-	pjDumpLine <<  eventNames.at(type) << endl;
+	pjDumpLine << getContainerName(cpuID, taskID, threadID) << PJDUMP_SEPARATOR;
+	pjDumpLine << getEventName(type) << PJDUMP_SEPARATOR;
+	pjDumpLine << timestamp << PJDUMP_SEPARATOR;
+	pjDumpLine << getEventName(type) << endl;
 
 	return pjDumpLine.str();
 }
@@ -406,13 +422,13 @@ string ParaverParser::parseEvent(string line) {
  * Parse a line representing a type link
  *
  * from
- * 3:objectSender:wantedSendTime:actualSendTime:objectReceiver:wantedReceiveTime:actualRcvTime:size:tag
+ * 	3:objectSender:wantedSendTime:actualSendTime:objectReceiver:wantedReceiveTime:actualRcvTime:size:tag
  *
  * objectSender = cpuID:appId:TaskID:threadID
  * objectReceiver = cpuID:appId:TaskID:threadID
  *
  * to
- * Link, containerName, linkType, startTime, endTime, duration, linkValue, sendingContainerName, receivingContainerName
+ * 	Link, containerName, linkType, startTime, endTime, duration, linkValue, sendingContainerName, receivingContainerName
  */
 string ParaverParser::parseLink(string line) {
 
@@ -457,7 +473,6 @@ string ParaverParser::parseLink(string line) {
 	long actualRcvTimestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-
 	// Other fields
 	// Size in byte
 	long size = stol(line.substr(0, line.find(PRV_SEPARATOR)));
@@ -468,18 +483,20 @@ string ParaverParser::parseLink(string line) {
 
 	stringstream pjDumpLine;
 	pjDumpLine << "Link, ";
-	pjDumpLine << resourceNames.at("THREAD").at(threadIDSend) << PJDUMP_SEPARATOR;
-	pjDumpLine <<  tag << PJDUMP_SEPARATOR;
+	pjDumpLine << getContainerName(cpuIDSend, taskIDSend, threadIDSend)
+			<< PJDUMP_SEPARATOR;
+	pjDumpLine << tag << PJDUMP_SEPARATOR;
 	pjDumpLine << actualSendTimestamp << PJDUMP_SEPARATOR;
 	pjDumpLine << actualRcvTimestamp << PJDUMP_SEPARATOR;
-	pjDumpLine << (actualRcvTimestamp - actualSendTimestamp) << PJDUMP_SEPARATOR;
-	pjDumpLine <<  tag << PJDUMP_SEPARATOR;
-	pjDumpLine << resourceNames.at("THREAD").at(threadIDSend) << PJDUMP_SEPARATOR;
-	pjDumpLine << resourceNames.at("THREAD").at(threadIDReceive) << endl;
+	pjDumpLine << (actualRcvTimestamp - actualSendTimestamp)
+			<< PJDUMP_SEPARATOR;
+	pjDumpLine << tag << PJDUMP_SEPARATOR;
+	pjDumpLine << getContainerName(cpuIDSend, taskIDSend, threadIDSend)
+			<< PJDUMP_SEPARATOR;
+	pjDumpLine << getContainerName(cpuIDReceive, taskIDReceive, threadIDReceive)  << endl;
 
 	return pjDumpLine.str();
 }
-
 
 /**
  * Build the containers
@@ -489,14 +506,81 @@ string ParaverParser::parseLink(string line) {
 string ParaverParser::buildProducers() {
 	stringstream producers;
 
+	if(resourceNames.find("THREAD") == resourceNames.end())
+		return "";
+
 	for (unsigned int i = 0; i < resourceNames.at("THREAD").size(); i++) {
 		producers << "Container, 0,";
 		producers << resourceNames.at("THREAD").at(i) << PJDUMP_SEPARATOR;
 		producers << 0 << PJDUMP_SEPARATOR;
-		producers << 1 << PJDUMP_SEPARATOR;
-		producers << 1 << PJDUMP_SEPARATOR;
+		producers << traceDuration << PJDUMP_SEPARATOR;
+		producers << traceDuration << PJDUMP_SEPARATOR;
 		producers << resourceNames.at("THREAD").at(i) << endl;
 	}
 
 	return producers.str();
+}
+
+/**
+ * Look if a name for the given type exists, if not, falls back on default values and if not return a default name with the type at the end
+ */
+string ParaverParser::getStateName(int type) {
+	if (stateNames.find(type) != stateNames.end())
+		return stateNames.at(type);
+
+	if (defaultStateValues.find(type) != defaultStateValues.end())
+		return defaultStateValues.at(type);
+
+	stringstream ss;
+	ss << UNKNOWN_STATE_TYPE << "_" << type;
+
+	return ss.str();
+}
+
+string ParaverParser::getEventName(int type) {
+	if (eventNames.find(type) != eventNames.end())
+		return eventNames.at(type);
+
+	stringstream ss;
+	ss << type;
+
+	return ss.str();
+}
+
+
+string ParaverParser::getContainerName(int cpuID, int taskID, int threadID) {
+	if (resourceNames.find("THREAD") != resourceNames.end())
+		if (resourceNames.at("THREAD").size() > taskID)
+			return resourceNames.at("THREAD").at(taskID - 1);
+
+	stringstream ss;
+	ss << "THREAD " << cpuID << "." << taskID << "." << threadID;
+
+	if (find(createdContainers.begin(), createdContainers.end(), ss.str()) != createdContainers.end())
+		return ss.str();
+
+	buildContainer(cpuID, taskID, threadID);
+
+	return ss.str();
+}
+
+/**
+ * Create a container and add it to the pjdump file
+ */
+void ParaverParser::buildContainer(int cpuID, int taskID, int threadID) {
+
+	stringstream container;
+	stringstream containerName;
+	containerName << "THREAD " << cpuID << "." << taskID << "." << threadID;
+
+	container << "Container, 0,";
+	container << containerName.str() << PJDUMP_SEPARATOR;
+	container << 0 << PJDUMP_SEPARATOR;
+	container << traceDuration << PJDUMP_SEPARATOR;
+	container << traceDuration << PJDUMP_SEPARATOR;
+	container << containerName.str() << endl;
+
+	pjdumpFile << container.str();
+
+	createdContainers.push_back(containerName.str());
 }

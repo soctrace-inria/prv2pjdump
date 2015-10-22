@@ -17,6 +17,7 @@ int main(int argc, char **argv) {
 }
 
 void Prv2Pjdump::launch(int argc, char **argv) {
+
 	if (argc < MINIMUM_INPUT_SIZE) {
 		cout
 				<< "Error: not enough arguments provided. You must provide at least one prv file."
@@ -30,14 +31,14 @@ void Prv2Pjdump::launch(int argc, char **argv) {
 	static struct option long_options[] = { { "output-file", required_argument,
 			0, 'o' }, { 0, 0, 0, 0 } };
 
+	// Check the provided options
 	while ((opt = getopt_long(argc, argv, "o:", long_options, &option_index))
 			!= -1) {
 		switch (opt) {
 		case 'o':
 			outputFile = optarg;
 			break;
-		default: /* '?' */
-			//cout << "Error: unknown option: " << opt << endl;
+		default: // '?'
 			printHelp();
 			return;
 		}
@@ -58,8 +59,8 @@ void Prv2Pjdump::launch(int argc, char **argv) {
 		return;
 	}
 
-	ParaverParser parser = ParaverParser(inputFile, confFile, resourceFile,
-			outputFile);
+	ParaverParser * parser = new ParaverParser();
+	parser->parse(inputFile, confFile, resourceFile, outputFile);
 
 	return;
 }
@@ -104,9 +105,10 @@ int Prv2Pjdump::handleFilenames() {
 			stringstream outputss;
 			outputss << basename << "_" << i << PJDUMP_FILE_EXTENSION;
 			outputFile = outputss.str();
-			cout << outputFile << endl;
 			i++;
 		}
+
+		cout << "Converted trace will be written in " << outputFile << endl;
 	}
 
 	return 0;

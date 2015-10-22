@@ -16,22 +16,40 @@ using namespace std;
 class ParaverParser {
 
 private:
+	// Match the names of the states with their IDs
 	map<int, string> stateNames;
+	// Match the names of the events with their IDs
 	map<int, string> eventNames;
+	// Match the names of the event value with their IDs
 	map<int, string> eventTypes;
-	long traceDuration;
-	int numberOfTasks;
-	int numberofApplications;
-	int numberOfNodes;
 
+
+	long traceDuration = 0;
+	int numberOfTasks = 0;
+	int numberofApplications = 0;
+	int numberOfNodes = 0;
+
+
+	vector<string> createdContainers;
+
+	// Path to the output file
 	string outputFile;
 
+	// The output file
+	ofstream pjdumpFile;
+
+	// Match the name of the resources from the row file
+	// THe first key is the level (CPU, NODE, THREAD, etc.)
 	map<string, vector<string> > resourceNames;
 
+	// Store keywords of the cfg configuration file
 	vector<string> keyWords;
+	// Number of processors per node
 	vector<int> nbProcPerNode;
 
+	// Number of threads in a task (tasks are stored in the same order as the
 	vector<int> taskThread;
+	// Node executing the task
 	vector<int> taskNode;
 
 	void parseConf(string confFile);
@@ -45,11 +63,41 @@ private:
 	string parseState(string line);
 	string parseLink(string line);
 	string parseRecord(string line);
+	string getStateName(int type);
+	string getEventName(int type);
+	string getContainerName(int cpuID, int taskID, int threadID);
 
 	string buildProducers();
+	void buildContainer(int cpuID, int taskID, int threadID);
 
 public:
-	ParaverParser(string traceFile, string confFile, string resourceFile, string outputFile);
+	ParaverParser();
+	void parse(string traceFile, string confFile, string resourceFile, string outputFile);
+
+	// Default values for the states as described in www.bsc.es/media/1370.pdf
+	static map<int, string> create_map() {
+		map<int, string> m;
+		m[0] = "Idle";
+		m[1] = "Running";
+		m[2] = "Not Created";
+		m[3] = "Waiting a message";
+		m[4] = "Blocked";
+		m[5] = "Thread synchronize";
+		m[6] = "Wait / Wait all";
+		m[7] = "Schedule and Fork/Join";
+		m[8] = "Test/Probe";
+		m[9] = "Blocking Send";
+		m[10] = "Immediate Send";
+		m[11] = "Immediate Receive";
+		m[12] = "I/O";
+		m[13] = "Global OP";
+		m[14] = "Tracing Disable";
+		return m;
+	}
+
+	//Store the default names for the states
+	static const map<int, string> defaultStateValues;
+
 };
 
 #endif

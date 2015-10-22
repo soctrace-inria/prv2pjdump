@@ -1,7 +1,6 @@
-*.project
-*.cproject
-*.settings
 /Debug
 /Release
-
-
+*~
+*.o
+*.d
+*.exe
