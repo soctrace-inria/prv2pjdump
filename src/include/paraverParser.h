@@ -65,7 +65,7 @@ private:
 	string parseRecord(string line);
 	string getStateName(int type);
 	string getEventName(int type);
-	string getContainerName(int cpuID, int taskID, int threadID);
+	string getContainerName(int cpuID, unsigned int taskID, int threadID);
 
 	string buildProducers();
 	void buildContainer(int cpuID, int taskID, int threadID);

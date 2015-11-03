@@ -548,7 +548,7 @@ string ParaverParser::getEventName(int type) {
 }
 
 
-string ParaverParser::getContainerName(int cpuID, int taskID, int threadID) {
+string ParaverParser::getContainerName(int cpuID, unsigned int taskID, int threadID) {
 	if (resourceNames.find("THREAD") != resourceNames.end())
 		if (resourceNames.at("THREAD").size() > taskID)
 			return resourceNames.at("THREAD").at(taskID - 1);

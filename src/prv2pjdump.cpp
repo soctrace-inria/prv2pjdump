@@ -125,5 +125,5 @@ void printHelp() {
  */
 bool exist(string filename) {
 	ifstream ifile(filename);
-	return ifile;
+	return ifile.is_open();
 }
