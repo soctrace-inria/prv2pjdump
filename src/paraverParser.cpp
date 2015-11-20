@@ -6,6 +6,12 @@ const string VALUE_CFG = "VALUES";
 const string TYPE_CFG = "TYPE";
 
 const string RESOURCE_LEVEL = "LEVEL";
+const string RESOURCE_LEVEL_CPU = "CPU";
+const string RESOURCE_LEVEL_THREAD = "THREAD";
+const string RESOURCE_LEVEL_NODE = "NODE";
+const string RESOURCE_LEVEL_APPLICATION = "APPL";
+const string RESOURCE_LEVEL_SYSTEM = "SYSTEM";
+const string RESOURCE_LEVEL_WORKLOAD = "WORKLOAD";
 
 const char PRV_SEPARATOR = ':';
 const char PJDUMP_SEPARATOR = ',';
@@ -16,13 +22,17 @@ const int LINK_CATEGORY = 3;
 
 const string UNKNOWN_STATE_TYPE = "UNKNOWN_TYPE";
 
+const string TASK_CONTAINER_PREFIX = "Task";
+const string APPLICATION_CONTAINER_PREFIX = "Application";
+const string NODE_CONTAINER_PREFIX = "Node";
+
 const map<int, string> ParaverParser::defaultStateValues = ParaverParser::create_map();
 
 ParaverParser::ParaverParser() {
-	keyWords.push_back(STATE_CFG);
-	keyWords.push_back(EVENT_CFG);
-	keyWords.push_back(VALUE_CFG);
-	keyWords.push_back(TYPE_CFG);
+	keyWords.insert(STATE_CFG);
+	keyWords.insert(EVENT_CFG);
+	keyWords.insert(VALUE_CFG);
+	keyWords.insert(TYPE_CFG);
 }
 
 void ParaverParser::parse(string traceFile, string confFile,
@@ -146,10 +156,10 @@ string ParaverParser::trim(string aString) {
 }
 
 /**
- * Check if an vector contains a string
+ * Check if a vector contains a string
  */
-bool ParaverParser::contains(vector<string> v, string element) {
-	return (find(v.begin(), v.end(), element) != v.end());
+bool ParaverParser::contains(set<string> s, string element) {
+	return (s.find(element) != s.end());
 }
 
 /**
@@ -163,7 +173,6 @@ void ParaverParser::parseResource(string resourceFile) {
 	while (getline(file, line)) {
 		// If the line describes a state
 		if (line.compare(0, 5, RESOURCE_LEVEL) == 0) {
-
 			line.erase(0, line.find(" ") + 1);
 			line = trim(line);
 			string resourceType = line.substr(0, line.find(" "));
@@ -185,13 +194,6 @@ void ParaverParser::parseTrace(string traceFile) {
 	file.open(traceFile.c_str());
 	string line;
 
-	// Get the first non empty line
-	while (getline(file, line) && line.empty()) {
-	}
-
-	// Handle the header
-	parseHeader(line);
-
 	// Open the output file
 	pjdumpFile.open(outputFile);
 
@@ -200,8 +202,15 @@ void ParaverParser::parseTrace(string traceFile) {
 		return;
 	}
 
+	// Get the first non empty line
+	while (getline(file, line) && line.empty()) {
+	}
+
+	// Handle the header
+	parseHeader(line);
+
 	// process the producers
-	pjdumpFile << buildProducers();
+	//pjdumpFile << buildProducers();
 
 	// handle the trace records
 	while (getline(file, line)) {
@@ -218,10 +227,14 @@ void ParaverParser::parseTrace(string traceFile) {
  * Parse the header of a .prv file
  */
 void ParaverParser::parseHeader(string headerLine) {
+
+	string date = headerLine.substr(0, headerLine.find(PRV_SEPARATOR));
 	// Skip date metadata
 	headerLine.erase(0, headerLine.find(PRV_SEPARATOR) + 1);
-	// Another one because of the ":" in the hour
-	headerLine.erase(0, headerLine.find(PRV_SEPARATOR) + 1);
+	if (date.find("(") != string::npos && date.find(")") == string::npos) {
+		// Another one because of the ":" in the hour
+		headerLine.erase(0, headerLine.find(PRV_SEPARATOR) + 1);
+	}
 
 	// Get duration
 	string durationStr = headerLine.substr(0, headerLine.find(PRV_SEPARATOR));
@@ -252,33 +265,66 @@ void ParaverParser::parseHeader(string headerLine) {
 			headerLine.substr(0, headerLine.find(PRV_SEPARATOR)));
 	headerLine.erase(0, headerLine.find(PRV_SEPARATOR) + 1);
 
-	//Parse task
-	string taskStr = headerLine.substr(0, headerLine.find(")"));
-	numberOfTasks = stoi(taskStr.substr(0, taskStr.find("(")));
-	taskStr.erase(0, taskStr.find("(") + 1);
+	// Parse tasks and threads for each application
+	for (int appNumber = 0; appNumber < numberofApplications; appNumber++) {
+		string appName = APPLICATION_CONTAINER_PREFIX + "_" + to_string(appNumber);
+		buildContainer(appName, "0");
+		int taskCount = 1;
 
-	while (taskStr.find(",") != string::npos) {
-		//Config for a task
-		string taskConfig = taskStr.substr(0, taskStr.find(","));
-		// Number of thread in the task
+		//Parse task
+		string taskStr = headerLine.substr(0, headerLine.find(")"));
+		numberOfTasks = stoi(taskStr.substr(0, taskStr.find("(")));
+		taskStr.erase(0, taskStr.find("(") + 1);
+
+		while (taskStr.find(",") != string::npos) {
+			// Config for a task
+			string taskConfig = taskStr.substr(0, taskStr.find(","));
+			// Number of thread in the task
+			taskThread.push_back(
+					stoi(taskConfig.substr(0, taskConfig.find(PRV_SEPARATOR))));
+
+			unsigned int nodeNumber = stoi(
+					taskConfig.substr(taskConfig.find(PRV_SEPARATOR) + 1,
+							taskConfig.length()));
+
+			string nodeName = NODE_CONTAINER_PREFIX + "_" + to_string(nodeNumber);
+			// Check for a substitute name
+			if (resourceNames.at(RESOURCE_LEVEL_NODE).size() >= nodeNumber) {
+				nodeName = resourceNames.at(RESOURCE_LEVEL_NODE).at(nodeNumber - 1);
+			}
+
+			buildContainer(nodeName, appName);
+
+			// Node executing the task
+			taskNode.push_back(nodeNumber);
+
+			string taskName = TASK_CONTAINER_PREFIX + "_" + to_string(taskCount);
+			buildContainer(taskName, nodeName);
+			taskCount++;
+
+			taskStr.erase(0, taskStr.find(",") + 1);
+		}
+
+		unsigned int nodeNumber = stoi(
+				taskStr.substr(taskStr.find(PRV_SEPARATOR) + 1,
+						taskStr.length()));
+		string nodeName = NODE_CONTAINER_PREFIX + "_" + to_string(nodeNumber);
+		// Check for a substitute name
+		if (resourceNames.at(RESOURCE_LEVEL_NODE).size() >= nodeNumber) {
+			nodeName = resourceNames.at(RESOURCE_LEVEL_NODE).at(nodeNumber - 1);
+		}
+
+		// Handle the last task
 		taskThread.push_back(
-				stoi(taskConfig.substr(0, taskConfig.find(PRV_SEPARATOR))));
-
-		// Node executing the task
+				stoi(taskStr.substr(0, taskStr.find(PRV_SEPARATOR))));
 		taskNode.push_back(
 				stoi(
-						taskConfig.substr(taskConfig.find(PRV_SEPARATOR) + 1,
-								taskConfig.length())));
+						taskStr.substr(taskStr.find(PRV_SEPARATOR) + 1,
+								taskStr.length())));
 
-		taskStr.erase(0, taskStr.find(",") + 1);
+		string taskName = TASK_CONTAINER_PREFIX + "_" + to_string(taskCount);
+		buildContainer(taskName, nodeName);
 	}
-
-	// Handle the last task
-	taskThread.push_back(stoi(taskStr.substr(0, taskStr.find(PRV_SEPARATOR))));
-	taskNode.push_back(
-			stoi(
-					taskStr.substr(taskStr.find(PRV_SEPARATOR) + 1,
-							taskStr.length())));
 }
 
 /**
@@ -355,7 +401,7 @@ string ParaverParser::parseState(string line) {
 
 	stringstream pjDumpLine;
 	pjDumpLine << "State, ";
-	pjDumpLine << getContainerName(cpuID, taskID, threadID) << PJDUMP_SEPARATOR;
+	pjDumpLine << getContainerName(appID, taskID, threadID) << PJDUMP_SEPARATOR;
 	pjDumpLine << getStateName(type) << PJDUMP_SEPARATOR;
 	pjDumpLine << startTimestamp << PJDUMP_SEPARATOR;
 	pjDumpLine << endTimestamp << PJDUMP_SEPARATOR;
@@ -410,7 +456,7 @@ string ParaverParser::parseEvent(string line) {
 
 	stringstream pjDumpLine;
 	pjDumpLine << "Event, ";
-	pjDumpLine << getContainerName(cpuID, taskID, threadID) << PJDUMP_SEPARATOR;
+	pjDumpLine << getContainerName(appID, taskID, threadID) << PJDUMP_SEPARATOR;
 	pjDumpLine << getEventName(type) << PJDUMP_SEPARATOR;
 	pjDumpLine << timestamp << PJDUMP_SEPARATOR;
 	pjDumpLine << getEventName(type) << endl;
@@ -483,7 +529,7 @@ string ParaverParser::parseLink(string line) {
 
 	stringstream pjDumpLine;
 	pjDumpLine << "Link, ";
-	pjDumpLine << getContainerName(cpuIDSend, taskIDSend, threadIDSend)
+	pjDumpLine << getContainerName(appIDSend, taskIDSend, threadIDSend)
 			<< PJDUMP_SEPARATOR;
 	pjDumpLine << tag << PJDUMP_SEPARATOR;
 	pjDumpLine << actualSendTimestamp << PJDUMP_SEPARATOR;
@@ -491,9 +537,9 @@ string ParaverParser::parseLink(string line) {
 	pjDumpLine << (actualRcvTimestamp - actualSendTimestamp)
 			<< PJDUMP_SEPARATOR;
 	pjDumpLine << tag << PJDUMP_SEPARATOR;
-	pjDumpLine << getContainerName(cpuIDSend, taskIDSend, threadIDSend)
+	pjDumpLine << getContainerName(appIDSend, taskIDSend, threadIDSend)
 			<< PJDUMP_SEPARATOR;
-	pjDumpLine << getContainerName(cpuIDReceive, taskIDReceive, threadIDReceive)  << endl;
+	pjDumpLine << getContainerName(appIDReceive, taskIDReceive, threadIDReceive)  << endl;
 
 	return pjDumpLine.str();
 }
@@ -548,39 +594,78 @@ string ParaverParser::getEventName(int type) {
 }
 
 
-string ParaverParser::getContainerName(int cpuID, unsigned int taskID, int threadID) {
-	if (resourceNames.find("THREAD") != resourceNames.end())
-		if (resourceNames.at("THREAD").size() > taskID)
-			return resourceNames.at("THREAD").at(taskID - 1);
+string ParaverParser::getContainerName(int appID, unsigned int taskID, int threadID) {
+	if (threadProducers.find(appID) != threadProducers.end())
+		if (threadProducers.at(appID).find(taskID)
+				!= threadProducers.at(appID).end())
+			if (threadProducers.at(appID).at(taskID).find(threadID)
+					!= threadProducers.at(appID).at(taskID).end())
+				return threadProducers.at(appID).at(taskID).at(threadID);
 
-	stringstream ss;
-	ss << "THREAD " << cpuID << "." << taskID << "." << threadID;
+	string name = "THREAD " + to_string(appID) + "." + to_string(taskID) + "."
+			+ to_string(threadID);
 
-	if (find(createdContainers.begin(), createdContainers.end(), ss.str()) != createdContainers.end())
-		return ss.str();
+	if(contains(createdContainers, name))
+		return name;
 
-	buildContainer(cpuID, taskID, threadID);
+	string taskParentID = TASK_CONTAINER_PREFIX + "_" + to_string(taskID);
+	if (contains(createdContainers, taskParentID)) {
+		buildContainer(appID, taskID, threadID, taskParentID);
+	} else {
+		buildContainer(appID, taskID, threadID, "0");
+	}
 
-	return ss.str();
+	return name;
 }
 
-/**
- * Create a container and add it to the pjdump file
- */
-void ParaverParser::buildContainer(int cpuID, int taskID, int threadID) {
-
+void ParaverParser::buildContainer(int appID, int taskID, int threadID, string parent) {
 	stringstream container;
-	stringstream containerName;
-	containerName << "THREAD " << cpuID << "." << taskID << "." << threadID;
+	string name = "THREAD " + to_string(appID) + "." + to_string(taskID) + "."
+			+ to_string(threadID);
 
-	container << "Container, 0,";
-	container << containerName.str() << PJDUMP_SEPARATOR;
+	// Check if already existing
+	if(contains(createdContainers, name))
+		return;
+
+	container << "Container" << PJDUMP_SEPARATOR;
+	container << parent << PJDUMP_SEPARATOR;
+	container << name << PJDUMP_SEPARATOR;
 	container << 0 << PJDUMP_SEPARATOR;
 	container << traceDuration << PJDUMP_SEPARATOR;
 	container << traceDuration << PJDUMP_SEPARATOR;
-	container << containerName.str() << endl;
+	container << name << endl;
 
 	pjdumpFile << container.str();
 
-	createdContainers.push_back(containerName.str());
+	createdContainers.insert(name);
+
+	if (threadProducers.find(appID) == threadProducers.end()) {
+		threadProducers[appID] = map<int, map<int, string>>();
+	}
+	if (threadProducers.at(appID).find(taskID)
+			== threadProducers.at(appID).end()) {
+		threadProducers[appID][taskID] = map<int, string>();
+	}
+
+	threadProducers[appID][taskID][threadID] = name;
+}
+
+void ParaverParser::buildContainer(string name, string parentName) {
+	// Check if already existing
+	if(contains(createdContainers, name))
+		return;
+
+	stringstream container;
+
+	container << "Container" << PJDUMP_SEPARATOR;
+	container << parentName << PJDUMP_SEPARATOR;
+	container << name << PJDUMP_SEPARATOR;
+	container << 0 << PJDUMP_SEPARATOR;
+	container << traceDuration << PJDUMP_SEPARATOR;
+	container << traceDuration << PJDUMP_SEPARATOR;
+	container << name << endl;
+
+	pjdumpFile << container.str();
+
+	createdContainers.insert(name);
 }

@@ -23,14 +23,12 @@ private:
 	// Match the names of the event value with their IDs
 	map<int, string> eventTypes;
 
-
 	long traceDuration = 0;
 	int numberOfTasks = 0;
 	int numberofApplications = 0;
 	int numberOfNodes = 0;
 
-
-	vector<string> createdContainers;
+	set<string> createdContainers;
 
 	// Path to the output file
 	string outputFile;
@@ -39,11 +37,14 @@ private:
 	ofstream pjdumpFile;
 
 	// Match the name of the resources from the row file
-	// THe first key is the level (CPU, NODE, THREAD, etc.)
+	// The first key is the level (CPU, NODE, THREAD, etc.)
 	map<string, vector<string> > resourceNames;
 
+	// Contains the names of the leave producer in the hierarchy (typically the threads)
+	map<int, map<int, map<int, string> > > threadProducers;
+
 	// Store keywords of the cfg configuration file
-	vector<string> keyWords;
+	set<string> keyWords;
 	// Number of processors per node
 	vector<int> nbProcPerNode;
 
@@ -56,7 +57,7 @@ private:
 	void parseTrace(string traceFile);
 	void parseResource(string resourceFile);
 	string trim(string aString);
-	bool contains(vector<string> v, string element);
+	bool contains(set<string> v, string element);
 	void parseEventConf(ifstream * file, string line);
 	void parseHeader(string headerLine);
 	string parseEvent(string line);
@@ -68,7 +69,8 @@ private:
 	string getContainerName(int cpuID, unsigned int taskID, int threadID);
 
 	string buildProducers();
-	void buildContainer(int cpuID, int taskID, int threadID);
+	void buildContainer(int cpuID, int taskID, int threadID, string parent);
+	void buildContainer(string name, string parentName);
 
 public:
 	ParaverParser();

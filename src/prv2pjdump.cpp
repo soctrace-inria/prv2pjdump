@@ -62,6 +62,8 @@ void Prv2Pjdump::launch(int argc, char **argv) {
 	ParaverParser * parser = new ParaverParser();
 	parser->parse(inputFile, confFile, resourceFile, outputFile);
 
+	cout << "End of conversion" << endl;
+
 	return;
 }
 
@@ -98,7 +100,8 @@ int Prv2Pjdump::handleFilenames() {
 		// Generate default name
 		outputFile = basename + PJDUMP_FILE_EXTENSION;
 
-		// Check if there is already an existing file with this name and if so find the first name corresponding to a non-existing file
+		// Check if there is already an existing file with this name
+		// and if so find the first name corresponding to a non-existing file
 		int i = 1;
 
 		while (exist(outputFile)) {
