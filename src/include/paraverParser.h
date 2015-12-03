@@ -23,7 +23,7 @@ private:
 	// Match the names of the event value with their IDs
 	map<int, string> eventTypes;
 
-	long traceDuration = 0;
+	long long traceDuration = 0;
 	int numberOfTasks = 0;
 	int numberofApplications = 0;
 	int numberOfNodes = 0;

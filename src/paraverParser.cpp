@@ -239,10 +239,10 @@ void ParaverParser::parseHeader(string headerLine) {
 	// Get duration
 	string durationStr = headerLine.substr(0, headerLine.find(PRV_SEPARATOR));
 	if (durationStr.find_first_of("_") == string::npos)
-		traceDuration = stol(durationStr);
+		traceDuration = stoll(durationStr);
 	else {
 		durationStr = durationStr.substr(0, headerLine.find("_"));
-		traceDuration = stol(durationStr);
+		traceDuration = stoll(durationStr);
 	}
 
 	headerLine.erase(0, headerLine.find(PRV_SEPARATOR) + 1);
@@ -390,10 +390,10 @@ string ParaverParser::parseState(string line) {
 	int threadID = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long startTimestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long startTimestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long endTimestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long endTimestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
 	int type = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
@@ -438,21 +438,21 @@ string ParaverParser::parseEvent(string line) {
 	int threadID = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long timestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long timestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
 	while (count(line.begin(), line.end(), PRV_SEPARATOR) > 1) {
 		int type = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 		line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-		long value = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+		long long value = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 		line.erase(0, line.find(PRV_SEPARATOR) + 1);
 	}
 
 	int type = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long value = stol(line);
+	long long value = stoll(line);
 
 	stringstream pjDumpLine;
 	pjDumpLine << "Event, ";
@@ -494,10 +494,10 @@ string ParaverParser::parseLink(string line) {
 	int threadIDSend = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long wantedSendTimestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long wantedSendTimestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long actualSendTimestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long actualSendTimestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
 	//receiverFields
@@ -513,15 +513,15 @@ string ParaverParser::parseLink(string line) {
 	int threadIDReceive = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long wantedRcvTimestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long wantedRcvTimestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	long actualRcvTimestamp = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long actualRcvTimestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
 	// Other fields
 	// Size in byte
-	long size = stol(line.substr(0, line.find(PRV_SEPARATOR)));
+	long long size = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
 	int tag = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
