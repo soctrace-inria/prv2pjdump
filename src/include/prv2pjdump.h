@@ -1,7 +1,7 @@
 #ifndef INCLUDE_PRV2PJDUMP_H_
 #define INCLUDE_PRV2PJDUMP_H_
-#include <iostream>
 #include <getopt.h>
+#include "common.h"
 #include "paraverParser.h"
 
 class Prv2Pjdump {
@@ -10,6 +10,7 @@ private:
 	string confFile = "";
 	string outputFile = "";
 	string resourceFile = "";
+	bool useEventForState = false;
 
 public:
 	void launch(int argc, char **argv);

@@ -13,9 +13,6 @@ const string RESOURCE_LEVEL_APPLICATION = "APPL";
 const string RESOURCE_LEVEL_SYSTEM = "SYSTEM";
 const string RESOURCE_LEVEL_WORKLOAD = "WORKLOAD";
 
-const char PRV_SEPARATOR = ':';
-const char PJDUMP_SEPARATOR = ',';
-
 const int STATE_CATEGORY = 1;
 const int EVENT_CATEGORY = 2;
 const int LINK_CATEGORY = 3;
@@ -28,11 +25,14 @@ const string NODE_CONTAINER_PREFIX = "Node";
 
 const map<int, string> ParaverParser::defaultStateValues = ParaverParser::create_map();
 
-ParaverParser::ParaverParser() {
+ParaverParser::ParaverParser(bool eventForState) {
 	keyWords.insert(STATE_CFG);
 	keyWords.insert(EVENT_CFG);
 	keyWords.insert(VALUE_CFG);
 	keyWords.insert(TYPE_CFG);
+	lastState = nullptr;
+
+	this->useEventForState = eventForState;
 }
 
 void ParaverParser::parse(string traceFile, string confFile,
@@ -86,6 +86,7 @@ void ParaverParser::parseConf(string confFile) {
 
 void ParaverParser::parseEventConf(ifstream *file, string line) {
 	bool valuePresent = false;
+	int eventId = -1;
 
 	while (getline(*file, line)
 			&& (line.compare(EVENT_CFG) == 0 || line.compare(VALUE_CFG) == 0
@@ -104,7 +105,7 @@ void ParaverParser::parseEventConf(ifstream *file, string line) {
 
 		// Get id
 		string id = line.substr(0, line.find(" "));
-		int eventId = stoi(id, nullptr);
+		eventId = stoi(id, nullptr);
 		line.erase(0, line.find(" ") + 1);
 
 		// Get name
@@ -119,12 +120,15 @@ void ParaverParser::parseEventConf(ifstream *file, string line) {
 				&& !line.empty()) {
 
 			string id = line.substr(0, line.find(" "));
-			int eventId = stoi(id, nullptr);
+			int eventValueId = stoi(id, nullptr);
 			line.erase(0, line.find(" ") + 1);
 
 			string eventType = trim(line);
 
-			eventTypes.insert(make_pair(eventId, eventType));
+			if(eventTypes.find(eventId) == eventTypes.end())
+				eventTypes[eventId] = map<int, string>();
+
+			eventTypes[eventId][eventValueId] = eventType;
 		}
 	}
 
@@ -399,17 +403,14 @@ string ParaverParser::parseState(string line) {
 	int type = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	stringstream pjDumpLine;
-	pjDumpLine << "State, ";
-	pjDumpLine << getContainerName(appID, taskID, threadID) << PJDUMP_SEPARATOR;
-	pjDumpLine << getStateName(type) << PJDUMP_SEPARATOR;
-	pjDumpLine << startTimestamp << PJDUMP_SEPARATOR;
-	pjDumpLine << endTimestamp << PJDUMP_SEPARATOR;
-	pjDumpLine << (endTimestamp - startTimestamp) << PJDUMP_SEPARATOR;
-	pjDumpLine << "0,";
-	pjDumpLine << getStateName(type) << endl;
+	if(lastState != nullptr)
+		free(lastState);
 
-	return pjDumpLine.str();
+	lastState = new State(startTimestamp,
+			getContainerName(appID, taskID, threadID), getStateName(type),
+			endTimestamp);
+
+	return lastState->toPjdump();
 }
 
 /**
@@ -441,27 +442,66 @@ string ParaverParser::parseEvent(string line) {
 	long long timestamp = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
+	map<int, long long> params = map<int, long long>();
+	int firstType = -1;
+	int firstValue = -1;
+
 	while (count(line.begin(), line.end(), PRV_SEPARATOR) > 1) {
 		int type = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 		line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
 		long long value = stoll(line.substr(0, line.find(PRV_SEPARATOR)));
 		line.erase(0, line.find(PRV_SEPARATOR) + 1);
+
+		params[type] = value;
+
+		if (firstType == -1)
+			firstType = type;
+		if (firstValue == -1)
+			firstValue = value;
 	}
 
 	int type = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
 	long long value = stoll(line);
+	params[type] = value;
 
-	stringstream pjDumpLine;
-	pjDumpLine << "Event, ";
-	pjDumpLine << getContainerName(appID, taskID, threadID) << PJDUMP_SEPARATOR;
-	pjDumpLine << getEventName(type) << PJDUMP_SEPARATOR;
-	pjDumpLine << timestamp << PJDUMP_SEPARATOR;
-	pjDumpLine << getEventName(type) << endl;
+	if (firstType == -1)
+		firstType = type;
+	if (firstValue == -1)
+		firstValue = value;
 
-	return pjDumpLine.str();
+	if (useEventForState && lastState != nullptr) {
+		if (lastState->getContainer()
+				== getContainerName(appID, taskID, threadID)
+				&& lastState->getTimeStamp() <= timestamp
+				&& lastState->getEndDate() >= timestamp) {
+
+			// Use the first param as it seems to be the most significant
+			// Add a prefix in order to avoid having event and state with the same name
+			string stateType = getEventName(firstType) + "_state";
+
+			// Is there an alternative name defined in the .pcf file
+			if(eventTypes.find(firstType) != eventTypes.end()){
+				stateType =  eventTypes.at(firstType).at(firstValue);
+			}
+
+			State eventState = State(timestamp, lastState->getContainer(),
+					stateType, lastState->getEndDate());
+			eventState.setImbrication(1);
+
+			free(lastState);
+			lastState = nullptr;
+
+			return eventState.toPjdump();
+		}
+	}
+
+	Event event = Event(timestamp, getContainerName(appID, taskID, threadID),
+			getEventName(type));
+
+	return event.toPjdump();
 }
 
 /**
@@ -527,21 +567,12 @@ string ParaverParser::parseLink(string line) {
 	int tag = stoi(line.substr(0, line.find(PRV_SEPARATOR)));
 	line.erase(0, line.find(PRV_SEPARATOR) + 1);
 
-	stringstream pjDumpLine;
-	pjDumpLine << "Link, ";
-	pjDumpLine << getContainerName(appIDSend, taskIDSend, threadIDSend)
-			<< PJDUMP_SEPARATOR;
-	pjDumpLine << tag << PJDUMP_SEPARATOR;
-	pjDumpLine << actualSendTimestamp << PJDUMP_SEPARATOR;
-	pjDumpLine << actualRcvTimestamp << PJDUMP_SEPARATOR;
-	pjDumpLine << (actualRcvTimestamp - actualSendTimestamp)
-			<< PJDUMP_SEPARATOR;
-	pjDumpLine << tag << PJDUMP_SEPARATOR;
-	pjDumpLine << getContainerName(appIDSend, taskIDSend, threadIDSend)
-			<< PJDUMP_SEPARATOR;
-	pjDumpLine << getContainerName(appIDReceive, taskIDReceive, threadIDReceive)  << endl;
+	Link link = Link(actualSendTimestamp,
+			getContainerName(appIDSend, taskIDSend, threadIDSend), "",
+			actualRcvTimestamp,
+			getContainerName(appIDReceive, taskIDReceive, threadIDReceive));
 
-	return pjDumpLine.str();
+	return link.toPjdump();
 }
 
 /**

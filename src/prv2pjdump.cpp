@@ -29,14 +29,19 @@ void Prv2Pjdump::launch(int argc, char **argv) {
 	int opt;
 	int option_index = 0;
 	static struct option long_options[] = { { "output-file", required_argument,
-			0, 'o' }, { 0, 0, 0, 0 } };
+			0, 'o' },
+			{ "event-state", required_argument,
+					0, 'e' },{ 0, 0, 0, 0 } };
 
 	// Check the provided options
-	while ((opt = getopt_long(argc, argv, "o:", long_options, &option_index))
+	while ((opt = getopt_long(argc, argv, "eo:", long_options, &option_index))
 			!= -1) {
 		switch (opt) {
 		case 'o':
 			outputFile = optarg;
+			break;
+		case 'e':
+			useEventForState = true;
 			break;
 		default: // '?'
 			printHelp();
@@ -59,7 +64,7 @@ void Prv2Pjdump::launch(int argc, char **argv) {
 		return;
 	}
 
-	ParaverParser * parser = new ParaverParser();
+	ParaverParser * parser = new ParaverParser(useEventForState);
 	parser->parse(inputFile, confFile, resourceFile, outputFile);
 
 	cout << "End of conversion" << endl;
@@ -121,6 +126,8 @@ void printHelp() {
 	cout << "Usage: prv2pjdump [OPTION] FILE" << endl;
 	cout << "Convert the paraver FILE into pjdump." << endl << endl;
 	cout << "\t -o, --output-file \tSpecify an output file." << endl;
+	cout << "\t -e, --event-state \tUse paraver events to build pjdump states."
+			<< endl;
 }
 
 /**

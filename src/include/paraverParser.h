@@ -1,12 +1,12 @@
 #ifndef PARAVER_PARSER_H
 #define PARAVER_PARSER_H
-#include <string>
-#include <iostream>
 #include <map>
 #include <regex>
 #include <fstream>
 #include <vector>
 #include <sstream>
+#include "common.h"
+#include "event.h"
 
 using namespace std;
 
@@ -21,14 +21,18 @@ private:
 	// Match the names of the events with their IDs
 	map<int, string> eventNames;
 	// Match the names of the event value with their IDs
-	map<int, string> eventTypes;
+	map<int, map<int, string>> eventTypes;
 
 	long long traceDuration = 0;
 	int numberOfTasks = 0;
 	int numberofApplications = 0;
 	int numberOfNodes = 0;
 
+	// Store the created containers
 	set<string> createdContainers;
+
+	// Store the last state created
+	State * lastState;
 
 	// Path to the output file
 	string outputFile;
@@ -38,12 +42,12 @@ private:
 
 	// Match the name of the resources from the row file
 	// The first key is the level (CPU, NODE, THREAD, etc.)
-	map<string, vector<string> > resourceNames;
+	map<string, vector<string>> resourceNames;
 
 	// Contains the names of the leave producer in the hierarchy (typically the threads)
-	map<int, map<int, map<int, string> > > threadProducers;
+	map<int, map<int, map<int, string>>> threadProducers;
 
-	// Store keywords of the cfg configuration file
+	// Store keywords of the .cfg configuration file
 	set<string> keyWords;
 	// Number of processors per node
 	vector<int> nbProcPerNode;
@@ -52,6 +56,9 @@ private:
 	vector<int> taskThread;
 	// Node executing the task
 	vector<int> taskNode;
+
+	// Specify if we use the paraver events to build the pjdump states
+	bool useEventForState = false;
 
 	void parseConf(string confFile);
 	void parseTrace(string traceFile);
@@ -73,7 +80,7 @@ private:
 	void buildContainer(string name, string parentName);
 
 public:
-	ParaverParser();
+	ParaverParser(bool eventForState);
 	void parse(string traceFile, string confFile, string resourceFile, string outputFile);
 
 	// Default values for the states as described in www.bsc.es/media/1370.pdf
