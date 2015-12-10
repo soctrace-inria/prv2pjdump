@@ -5,15 +5,18 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
 ../src/paraverParser.cpp \
-../src/prv2pjdump.cpp 
+../src/prv2pjdump.cpp \
+../src/event.cpp 
 
 OBJS += \
 ./src/paraverParser.o \
-./src/prv2pjdump.o 
+./src/prv2pjdump.o \
+./src/event.o
 
 CPP_DEPS += \
 ./src/paraverParser.d \
-./src/prv2pjdump.d 
+./src/prv2pjdump.d \
+./src/event.d
 
 
 # Each subdirectory must supply rules for building sources it contributes

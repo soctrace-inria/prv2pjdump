@@ -2,7 +2,7 @@
 .PHONY: all linux linux-x86 win64 win32 clean
 
 # All Target
-all: linux
+all: linux linux-x86 win64 win32
 
 linux:
 	(cd linux_x64; make)
