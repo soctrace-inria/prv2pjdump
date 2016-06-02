@@ -5,6 +5,7 @@
 #include <fstream>
 #include <vector>
 #include <sstream>
+#include <set>
 #include "common.h"
 #include "event.h"
 
